@@ -40,10 +40,10 @@ node('maven') {
   }
 
   stage('Deploy to Dev') {
-    // Patch the DeploymentConfig so that it points to the latest TestingCandidate-${version} Image.
+    // Patch the DeploymentConfig so that it points to the latest dev-${version} Image.
     // Do deploy the target.
     sh "oc project dev"
-    sh "oc patch dc sampleweb --patch '{\"spec\": { \"triggers\": [ { \"type\": \"ImageChange\", \"imageChangeParams\": { \"containerNames\": [ \"sampleweb\" ], \"from\": { \"kind\": \"ImageStreamTag\", \"namespace\": \"dev\", \"name\": \"sampleweb:TestingCandidate-$version\"}}}]}}' -n dev"
+    sh "oc patch dc sampleweb --patch '{\"spec\": { \"triggers\": [ { \"type\": \"ImageChange\", \"imageChangeParams\": { \"containerNames\": [ \"sampleweb\" ], \"from\": { \"kind\": \"ImageStreamTag\", \"namespace\": \"dev\", \"name\": \"sampleweb:dev-$version\"}}}]}}' -n dev"
 
     openshiftDeploy depCfg: 'sampleweb', namespace: 'dev', verbose: 'false', waitTime: '', waitUnit: 'sec'
     openshiftVerifyDeployment depCfg: 'sampleweb', namespace: 'dev', replicaCount: '1', verbose: 'false', verifyReplicaCount: 'false', waitTime: '', waitUnit: 'sec'
