@@ -11,7 +11,7 @@ import java.util.List;
  */
 public class TomcatService {
 
-    private TomcatDAO dao = new JdbcTomcatDAO();
+    TomcatDAO dao = new JdbcTomcatDAO();
 
     public void addEntry(TomcatEntry entry) {
         dao.save(entry);

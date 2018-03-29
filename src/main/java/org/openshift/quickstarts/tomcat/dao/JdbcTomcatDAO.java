@@ -17,7 +17,7 @@ import java.util.Random;
  *  TODO: initialize schema whenever necessary (what if db is not persistent and is restarted while app is running)
  */
 public class JdbcTomcatDAO implements TomcatDAO {
-	static final String DB_JNDI = "jdbc/sampledb";
+	static String DB_JNDI = "jdbc/sampledb";
 
     private final DataSource dataSource;
 
@@ -64,12 +64,14 @@ public class JdbcTomcatDAO implements TomcatDAO {
     }
 
     private boolean isSchemaInitialized(Connection connection) throws SQLException {
+//        ResultSet rset = connection.getMetaData().getTables(null, null, "TODO_ENTRIES", null);
         ResultSet rset = connection.getMetaData().getTables(null, null, "todo_entries", null);
-        try {
-            return rset.next();
-        } finally {
-            rset.close();
-        }
+        boolean inited = rset.next();
+        rset.close();
+        rset = connection.getMetaData().getTables(null, null, "TODO_ENTRIES", null);
+        inited = inited || rset.next();
+        rset.close();
+        return inited;
     }
 
     @Override
@@ -113,7 +115,7 @@ public class JdbcTomcatDAO implements TomcatDAO {
                         while (rset.next()) {
                             Long id = rset.getLong(1);
                             String summary = rset.getString(2);
-                            String description = rset.getString(2);
+                            String description = rset.getString(3);
                             list.add(new TomcatEntry(id, summary, description));
                         }
                     } finally {

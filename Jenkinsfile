@@ -63,9 +63,25 @@ node('maven') {
 				// sh "oc project ${devPrj}"
 				// sh "oc patch dc ${appName} --patch '{\"spec\": { \"triggers\": [ { \"type\": \"ImageChange\", \"imageChangeParams\": { \"containerNames\": [ \"$appName\" ], \"from\": { \"kind\": \"ImageStreamTag\", \"namespace\": \"$devPrj\", \"name\": \"$appName:dev-$version\"}}}]}}' -n $devPrj"
 				//
+				def triggers = 
+						[
+							[
+								"type" : "ImageChange",
+								"imageChangeParams" :
+									[
+										"containerNames" : [ "$appName" ],
+										"from" :
+											[
+												"kind" : "ImageStreamTag",
+												"namespace" : "$devPrj",
+												"name" : "$appName:dev-$version"    
+											]   
+									]
+						 	]
+						]
 				def patch = openshift.selector("dc", appName).object()
-				patch.spec.triggers[0].imageChangeParams.from.name = "$appName:$newTag"
-				echo "patched spec.triggers: ${patch.spec.triggers[0]}"
+				patch.spec.triggers = triggers
+				echo "patched spec.triggers: ${patch.spec.triggers}"
 				openshift.apply(patch)
 				
 				//
