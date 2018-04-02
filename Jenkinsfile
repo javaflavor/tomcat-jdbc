@@ -7,7 +7,7 @@ node('maven') {
 	def appName = "sampleweb"
 	def devPrj = "dev"
 	
-	stage('Cleanup Dev env') {
+	stage('Cleanup env Dev') {
 		// Delete all objects except for is.
 		openshift.withCluster() {
 			openshift.withProject(devPrj) {
@@ -28,9 +28,8 @@ node('maven') {
 	def artifactId = getArtifactIdFromPom("pom.xml")
 	def version    = getVersionFromPom("pom.xml")
 
-	stage('Build war') {
+	stage('Build WAR') {
 		echo "Building version ${version}"
-
 		sh "${mvnCmd} clean package -DskipTests"
 	}
 	
@@ -41,7 +40,7 @@ node('maven') {
 
 	def newTag = "dev-${version}"
 
-	stage('Build OpenShift Image') {
+	stage('Build Image') {
 		echo "New Tag: ${newTag}"
 
 		// Copy the war file and the configurations to deployments directory.
@@ -50,12 +49,6 @@ node('maven') {
 		sh "cp ./target/tomcat-jdbc.war deployments/ROOT.war"
 
 		// Start Binary Build in OpenShift using the file we just published
-		// Add new tag to newly create Image.
-		// 
-		// sh "oc project ${devPrj}"
-		// sh "oc start-build ${appName} --follow --from-dir=./deployments -n ${devPrj}"
-		// sh "oc tag $appName:latest $appName:$newTag"
-		// 
 		openshift.withCluster() {
 			openshift.withProject(devPrj) {
 				// Create buildConfig from file "openshift/sampleweb-bc.yaml".
@@ -71,29 +64,14 @@ node('maven') {
 	}
 
 	stage('Deploy to Dev') {
-		// Patch the DeploymentConfig so that it points to the latest dev-${version} Image.
 		// Do deploy the target.
-		//
 		openshift.withCluster() {
 			openshift.withProject(devPrj) {
-				//
-				// sh "oc project ${devPrj}"
-				// sh "oc patch dc ${appName} --patch '{\"spec\": { \"triggers\": [ { \"type\": \"ImageChange\", \"imageChangeParams\": { \"containerNames\": [ \"$appName\" ], \"from\": { \"kind\": \"ImageStreamTag\", \"namespace\": \"$devPrj\", \"name\": \"$appName:dev-$version\"}}}]}}' -n $devPrj"
-				//
+				// Deploy created image.
 			    def created = openshift.newApp("--name=$appName", "$devPrj/$appName:$newTag")
+				echo "${created.actions[0].cmd}"
+				echo "${created.actions[0].out}"
 				
-				//
-				// openshiftDeploy depCfg: appName, namespace: devPrj, verbose: 'false', waitTime: '', waitUnit: 'sec'
-				// openshiftVerifyDeployment depCfg: appName, namespace: devPrj, replicaCount: '1', verbose: 'false', verifyReplicaCount: 'false', waitTime: '', waitUnit: 'sec'
-				// 
-				// Rollout latest.
-//				def dc = openshift.selector("dc", appName);
-				
-				//dc.rollout().latest()
-				
-//				def result = dc.rollout().status()
-//				echo "rollout status: ${result}"
-
 				// Expose service.
 				created.narrow("svc").expose()
 
