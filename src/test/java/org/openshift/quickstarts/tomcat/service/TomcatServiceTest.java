@@ -1,8 +1,6 @@
 package org.openshift.quickstarts.tomcat.service;
 
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 
 import java.util.List;
@@ -44,7 +42,9 @@ public class TomcatServiceTest {
 		service.addEntry(entry);
 		
 		List<TomcatEntry> list = service.dao.list();
-		assertThat(list.size(), is(1));		
+		assertThat(list.stream()
+				.filter(e -> "summary".equals(e.getSummary()) && "description".equals(e.getDescription()))
+				.count(), is(not(0)));		
 	}
 
 	@Test

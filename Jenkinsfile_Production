@@ -1,0 +1,112 @@
+#!groovy
+
+node('maven') {
+	//def mvnCmd = "mvn -s ./settings.xml"
+	def mvnCmd = "mvn"
+	
+	def appName = "sampleweb"
+	def devPrj = "dev"
+	def prdPrj = "prd"
+	
+	stage('Checkout Source') {
+		checkout scm
+	}
+
+	def groupId    = getGroupIdFromPom("pom.xml")
+	def artifactId = getArtifactIdFromPom("pom.xml")
+	def version    = getVersionFromPom("pom.xml")
+	
+	def newTag = "prd-${version}"
+	
+	stage('Prepare image') {
+		openshift.withCluster() {
+			openshift.withProject(devPrj) {
+				// Tag target image as production ready.
+				def result = openshift.tag("$appName:latest", "$appName:$newTag")
+				echo "${result.actions[0].cmd}"
+				echo "${result.actions[0].out}"
+			}
+		}
+	}
+
+
+	stage('Prepare env Prd') {
+		openshift.withCluster() {
+			openshift.withProject(prdPrj) {
+			    if (!openshift.selector("dc", "$appName-blue").exists()) {
+			        def created = openshift.newApp("$devPrj/$appName:$newTag", "--name=$appName-blue", "--allow-missing-imagestream-tags", "--labels=app=$appName")
+			        created.narrow("svc").delete()
+			        created.narrow("dc").expose("--port=8080")
+			        openshift.set("triggers", "dc/$appName-blue", "--manual")
+			    }
+			    if (!openshift.selector("dc", "$appName-green").exists()) {
+			        def created = openshift.newApp("$devPrj/$appName:$newTag", "--name=$appName-green", "--allow-missing-imagestream-tags", "--labels=app=$appName")
+			        created.narrow("svc").delete()
+			        created.narrow("dc").expose("--port=8080")
+			        openshift.set("triggers", "dc/$appName-green", "--manual")
+			    }
+			    if (!openshift.selector("route", "$appName").exists()) {
+			        openshift.selector("svc", "$appName-blue").expose("--name=$appName")
+			    }
+			}
+		}		
+	}
+
+    def dest = "$appName-green"
+    def active = ""
+    
+	stage('Prepare Blue/Green') {
+		openshift.withCluster() {
+			openshift.withProject(prdPrj) {
+			    def route = openshift.selector("route", "$appName").object()
+			    active = route.spec.to.name
+			    echo "Active svc: $active"
+			    
+			    if (active == "$appName-green") {
+			        dest = "$appName-blue"
+			    }
+			    echo "Dest svc:   $dest"
+			}
+		}
+	}
+	
+	stage('Deploy to Prd') {
+		openshift.withCluster() {
+			openshift.withProject(prdPrj) {
+			    echo "Deploying to ${dest}"
+			    def patch = openshift.selector("dc", "$dest").object()
+			    patch.spec.triggers[0].imageChangeParams.from.name = "$appName:$newTag"
+			    patch.spec.triggers[0].imageChangeParams.from.namespace = devPrj
+			    echo "Patch spec: ${patch.spec.triggers[0]}"
+			    
+			    openshift.apply(patch)
+			    
+			    def dc = openshift.selector("dc", "$dest")
+			    dc.rollout().latest()
+			    dc.rollout().status("-w")
+			    
+			    // Switch over to new route.
+			    patch = openshift.selector("route", "$appName").object()
+			    patch.spec.to.name = dest
+			    echo "Patch spec.to.name: ${patch.spec.to.name}"
+
+			    openshift.apply(patch)
+			}
+		}
+	}
+}
+
+// Convenience Functions to read variables from the pom.xml
+def getVersionFromPom(pom) {
+	def matcher = readFile(pom) =~ '<version>(.+)</version>'
+	matcher ? matcher[0][1] : null
+}
+def getGroupIdFromPom(pom) {
+	def matcher = readFile(pom) =~ '<groupId>(.+)</groupId>'
+	matcher ? matcher[0][1] : null
+}
+def getArtifactIdFromPom(pom) {
+	def matcher = readFile(pom) =~ '<artifactId>(.+)</artifactId>'
+	matcher ? matcher[0][1] : null
+}
+
