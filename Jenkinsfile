@@ -6,6 +6,19 @@ node('maven') {
 	
 	def appName = "sampleweb"
 	def devPrj = "dev"
+	
+	stage('Cleanup Dev env') {
+		// Delete all objects except for is.
+		openshift.withCluster() {
+			openshift.withProject(devPrj) {
+			    openshift.selector("bc", [ app: appName ]).delete()
+			    openshift.selector("dc", [ app: appName ]).delete()
+			    openshift.selector("svc", [ app: appName ]).delete()
+			    openshift.selector("pod", [ app: appName ]).delete()
+			    openshift.selector("route", [ app: appName ]).delete()
+			}
+		}
+	}
 
 	stage('Checkout Source') {
 		checkout scm
@@ -45,7 +58,11 @@ node('maven') {
 		// 
 		openshift.withCluster() {
 			openshift.withProject(devPrj) {
+				// Create buildConfig from file "openshift/sampleweb-bc.yaml".
+			    openshift.create(readFile("openshift/sampleweb-bc.yaml"))
+			    // Start image build.
 				openshift.selector("bc", appName).startBuild("--from-dir=./deployments").logs("-f")
+				// Tag created image.
 				def result = openshift.tag("$appName:latest", "$appName:$newTag")
 				echo "${result.actions[0].cmd}"
 				echo "${result.actions[0].out}"
@@ -63,36 +80,25 @@ node('maven') {
 				// sh "oc project ${devPrj}"
 				// sh "oc patch dc ${appName} --patch '{\"spec\": { \"triggers\": [ { \"type\": \"ImageChange\", \"imageChangeParams\": { \"containerNames\": [ \"$appName\" ], \"from\": { \"kind\": \"ImageStreamTag\", \"namespace\": \"$devPrj\", \"name\": \"$appName:dev-$version\"}}}]}}' -n $devPrj"
 				//
-				def triggers = 
-						[
-							[
-								"type" : "ImageChange",
-								"imageChangeParams" :
-									[
-										"containerNames" : [ "$appName" ],
-										"from" :
-											[
-												"kind" : "ImageStreamTag",
-												"namespace" : "$devPrj",
-												"name" : "$appName:dev-$version"    
-											]   
-									]
-						 	]
-						]
-				def patch = openshift.selector("dc", appName).object()
-				patch.spec.triggers = triggers
-				echo "patched spec.triggers: ${patch.spec.triggers}"
-				openshift.apply(patch)
+			    def created = openshift.newApp("--name=$appName", "$devPrj/$appName:$newTag")
 				
 				//
 				// openshiftDeploy depCfg: appName, namespace: devPrj, verbose: 'false', waitTime: '', waitUnit: 'sec'
 				// openshiftVerifyDeployment depCfg: appName, namespace: devPrj, replicaCount: '1', verbose: 'false', verifyReplicaCount: 'false', waitTime: '', waitUnit: 'sec'
 				// 
 				// Rollout latest.
-				def dc = openshift.selector("dc", appName);
-				dc.rollout().latest()
+//				def dc = openshift.selector("dc", appName);
 				
+				//dc.rollout().latest()
+				
+//				def result = dc.rollout().status()
+//				echo "rollout status: ${result}"
+
+				// Expose service.
+				created.narrow("svc").expose()
+
 				// Wait and print status deployment.
+				def dc = created.narrow("dc")
 				dc.rollout().status("-w")
 			}
 		}
