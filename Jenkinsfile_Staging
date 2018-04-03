@@ -85,7 +85,7 @@ node('maven') {
 	
 	stage('Integration Tests') {
 		echo "Integration Tests"
-		sh "${mvnCmd} -Pit verify"
+		sh "${mvnCmd} -Pit verify -Dtarget.host=`oc get route $appName -n $devPrj --template='{{ .spec.host }}'` -Dtarget.port=80"
 		
 		// Add Staging ready tag to the IT-passed image.
 		newTag = "stg-${version}"
