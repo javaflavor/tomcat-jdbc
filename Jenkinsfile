@@ -51,6 +51,10 @@ node('maven') {
 		// Start Binary Build in OpenShift using the file we just published
 		openshift.withCluster() {
 			openshift.withProject(devPrj) {
+				if (!openshift.selector("is", appName).exists()) {
+					// Create imageStream from file "openshift/sampleweb-is.yaml".
+					openshift.create(readFile("openshift/sampleweb-is.yaml"))
+				}
 				// Create buildConfig from file "openshift/sampleweb-bc.yaml".
 			    openshift.create(readFile("openshift/sampleweb-bc.yaml"))
 			    // Start image build.
