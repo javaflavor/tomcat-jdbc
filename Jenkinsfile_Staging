@@ -117,18 +117,14 @@ node('maven') {
 			openshift.withProject(stgPrj) {
 			    if (!openshift.selector("dc", "$appName-blue").exists()) {
 			        def created = openshift.newApp("$devPrj/$appName:$newTag", "--name=$appName-blue", "--allow-missing-imagestream-tags", "--labels=app=$appName")
-			        if (created.narrow("svc").count() == 0) {
-			            echo "oc new-app not created svc."
-			            created.narrow("dc").expose("--port=8080")
-			        }
-			        // Patch triggers to manual. Use openshift.apply(), because OCP3.6 does not work oc set triggers.
-			        def patch = created.narrow("dc").object()
-			        def imgchg = patch.spec.triggers.find{ it.type == 'ImageChange' }
-			        imgchg.imageChangeParams.automatic = false
-			        patch.spec.triggers = [ imgchg ]
-			        openshift.apply(patch)
 			        // Waiting initial deployment
 			        created.narrow("dc").rollout().status("-w")
+			        // Patch triggers to manual. Use openshift.apply(), because OCP3.6 does not work oc set triggers.
+			        def patch = created.narrow("dc").object()
+			        def trigger = patch.spec.triggers.find{ it.type == 'ImageChange' }
+			        trigger.imageChangeParams.automatic = false
+			        patch.spec.triggers = [ trigger ]
+			        openshift.apply(patch)
 			    }
 			    // Delete unnecessary is.
 			    if (openshift.selector("is", "$appName-blue").exists()) {
@@ -136,18 +132,14 @@ node('maven') {
 			    }
 			    if (!openshift.selector("dc", "$appName-green").exists()) {
 			        def created = openshift.newApp("$devPrj/$appName:$newTag", "--name=$appName-green", "--allow-missing-imagestream-tags", "--labels=app=$appName")
-			        if (created.narrow("svc").count() == 0) {
-			            echo "oc new-app not created svc."
-			            created.narrow("dc").expose("--port=8080")
-			        }
-			        // Patch triggers to manual. Use openshift.apply(), because OCP3.6 does not work oc set triggers.
-			        def patch = created.narrow("dc").object()
-			        def imgchg = patch.spec.triggers.find{ it.type == 'ImageChange' }
-			        imgchg.imageChangeParams.automatic = false
-			        patch.spec.triggers = [ imgchg ]
-			        openshift.apply(patch)
 			        // Waiting initial deployment
 			        created.narrow("dc").rollout().status("-w")
+			        // Patch triggers to manual. Use openshift.apply(), because OCP3.6 does not work oc set triggers.
+			        def patch = created.narrow("dc").object()
+			        def trigger = patch.spec.triggers.find{ it.type == 'ImageChange' }
+			        trigger.imageChangeParams.automatic = false
+			        patch.spec.triggers = [ trigger ]
+			        openshift.apply(patch)
 			    }
 			    // Delete unnecessary is.
 			    if (openshift.selector("is", "$appName-green").exists()) {
