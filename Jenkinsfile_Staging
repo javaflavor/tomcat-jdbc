@@ -1,5 +1,7 @@
 #!groovy
 
+import groovy.json.JsonOutput
+
 node('maven') {
 	//def mvnCmd = "mvn -s ./settings.xml"
 	def mvnCmd = "mvn"
@@ -115,16 +117,43 @@ node('maven') {
 			openshift.withProject(stgPrj) {
 			    if (!openshift.selector("dc", "$appName-blue").exists()) {
 			        def created = openshift.newApp("$devPrj/$appName:$newTag", "--name=$appName-blue", "--allow-missing-imagestream-tags", "--labels=app=$appName")
-			        created.narrow("svc").delete()
-			        created.narrow("dc").expose("--port=8080")
-			        openshift.set("triggers", "dc/$appName-blue", "--manual")
+			        if (created.narrow("svc").count() == 0) {
+			            echo "oc new-app not created svc."
+			            created.narrow("dc").expose("--port=8080")
+			        }
+			        // Patch triggers to manual. Use openshift.apply(), because OCP3.6 does not work oc set triggers.
+			        def patch = created.narrow("dc").object()
+			        def imgchg = patch.spec.triggers.find{ it.type == 'ImageChange' }
+			        imgchg.imageChangeParams.automatic = false
+			        patch.spec.triggers = [ imgchg ]
+			        openshift.apply(patch)
+			        // Waiting initial deployment
+			        created.narrow("dc").rollout().status("-w")
+			    }
+			    // Delete unnecessary is.
+			    if (openshift.selector("is", "$appName-blue").exists()) {
+			        openshift.selector("is", "$appName-blue").delete()
 			    }
 			    if (!openshift.selector("dc", "$appName-green").exists()) {
 			        def created = openshift.newApp("$devPrj/$appName:$newTag", "--name=$appName-green", "--allow-missing-imagestream-tags", "--labels=app=$appName")
-			        created.narrow("svc").delete()
-			        created.narrow("dc").expose("--port=8080")
-			        openshift.set("triggers", "dc/$appName-green", "--manual")
+			        if (created.narrow("svc").count() == 0) {
+			            echo "oc new-app not created svc."
+			            created.narrow("dc").expose("--port=8080")
+			        }
+			        // Patch triggers to manual. Use openshift.apply(), because OCP3.6 does not work oc set triggers.
+			        def patch = created.narrow("dc").object()
+			        def imgchg = patch.spec.triggers.find{ it.type == 'ImageChange' }
+			        imgchg.imageChangeParams.automatic = false
+			        patch.spec.triggers = [ imgchg ]
+			        openshift.apply(patch)
+			        // Waiting initial deployment
+			        created.narrow("dc").rollout().status("-w")
 			    }
+			    // Delete unnecessary is.
+			    if (openshift.selector("is", "$appName-green").exists()) {
+			        openshift.selector("is", "$appName-green").delete()
+			    }
+			    // Create route shared with blue and green.
 			    if (!openshift.selector("route", "$appName").exists()) {
 			        openshift.selector("svc", "$appName-blue").expose("--name=$appName")
 			    }
@@ -155,9 +184,10 @@ node('maven') {
 			openshift.withProject(stgPrj) {
 			    echo "Deploying to ${dest}"
 			    def patch = openshift.selector("dc", "$dest").object()
-			    patch.spec.triggers[0].imageChangeParams.from.name = "$appName:$newTag"
-			    patch.spec.triggers[0].imageChangeParams.from.namespace = devPrj
-			    echo "Patch spec: ${patch.spec.triggers[0]}"
+			    def trigger = patch.spec.triggers.find{ it.type == 'ImageChange' }
+			    trigger.imageChangeParams.from.name = "$appName:$newTag"
+			    trigger.imageChangeParams.from.namespace = devPrj
+			    echo "Patch spec: ${patch.spec.triggers}"
 			    
 			    openshift.apply(patch)
 			    
