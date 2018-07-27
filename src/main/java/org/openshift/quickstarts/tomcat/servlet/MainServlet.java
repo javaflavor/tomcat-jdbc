@@ -51,7 +51,8 @@ public class MainServlet extends HttpServlet {
                 } else if (insideLoop) {
                     sb.append(line).append("\n");
                 } else {
-                    out.println(line);
+                	String hostname = System.getenv("HOSTNAME");
+                    out.println(line.replace("{{ hostname }}", hostname == null ? "" : hostname));
                 } 
         		
             }
