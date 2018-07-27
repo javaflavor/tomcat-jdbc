@@ -51,8 +51,13 @@ public class MainServlet extends HttpServlet {
                 } else if (insideLoop) {
                     sb.append(line).append("\n");
                 } else {
-                	String hostname = System.getenv("HOSTNAME");
-                    out.println(line.replace("{{ hostname }}", hostname == null ? "" : hostname));
+                	String hostname = System.getenv("HOSTNAME") == null ? "" : System.getenv("HOSTNAME");
+                	if (hostname.contains("blue")) {
+                		hostname = "<div class=\"text-primary\">" + hostname + "</div>";
+                	} else if (hostname.contains("green")) {
+                		hostname = "<div class=\"text-success\">" + hostname + "</div>";
+                	}
+                    out.println(line.replace("{{ hostname }}", hostname));
                 } 
         		
             }
